@@ -1,0 +1,43 @@
+parameters:
+- name: projectName
+  type: string
+- name: buildConfiguration
+  type: string
+  default: Release
+
+jobs: 
+- job: Build
+  displayName: Build FunctionApp
+  steps:
+    - task: UseDotNet@2
+      displayName: Install .NET 8
+      inputs:
+        packageType: 'sdk'
+        version: '8.x'
+
+    - task: DotNetCoreCLI@2
+      displayName: 'Restore project dependencies'
+      inputs:
+        command: 'restore'
+        projects: '$(Build.SourcesDirectory)/**/${{ parameters.projectName }}.csproj'
+
+    - task: DotNetCoreCLI@2
+      displayName: 'Build the project - ${{ parameters.buildConfiguration }}'
+      inputs:
+        command: 'build'
+        arguments: '--no-restore --configuration ${{ parameters.buildConfiguration }}'
+        projects: '$(Build.SourcesDirectory)/**/${{ parameters.projectName }}.csproj'
+
+    - task: DotNetCoreCLI@2
+      displayName: 'Publish the project - ${{ parameters.buildConfiguration }}'
+      inputs:
+        command: 'publish'
+        projects: '$(Build.SourcesDirectory)/**/${{ parameters.projectName }}.csproj'
+        publishWebProjects: false
+        arguments: '--no-build --configuration ${{ parameters.buildConfiguration }} --output $(Build.ArtifactStagingDirectory)'
+        zipAfterPublish: true
+
+    - publish: '$(Build.ArtifactStagingDirectory)'
+      artifact: drop
+      displayName: Publish artifact drop
+      

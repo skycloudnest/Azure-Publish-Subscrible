@@ -1,0 +1,68 @@
+parameters:
+  - name: projectLocation
+    type: string
+  - name: artifactName
+    type: string
+  - name: backendServiceArm
+    type: string
+  - name: bckco
+    type: string
+  - name: bckke
+    type: string
+
+jobs:
+- job: Build_IaC
+  displayName: Build IaC
+  steps: 
+    - checkout: self
+
+    - task: AzureCLI@2
+      inputs:
+        azureSubscription: ${{parameters.backendServiceArm}}
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: 'az storage container create -n ${{ parameters.bckco }} --account-name $(bcksa)'
+
+    - task: TerraformInstaller@1
+      displayName: tfinstall
+      inputs:
+        terraformVersion: "latest"
+
+    - task: TerraformTaskV4@4
+      displayName: tfinit
+      inputs:
+        provider: "azurerm"
+        command: "init"
+        workingDirectory: ${{parameters.projectLocation}}
+        backendServiceArm: ${{parameters.backendServiceArm}}
+        backendAzureRmResourceGroupName: $(bckrg)
+        backendAzureRmStorageAccountName: $(bcksa)
+        backendAzureRmContainerName: ${{parameters.bckco}}
+        backendAzureRmKey: ${{parameters.bckke}}
+
+    - task: TerraformTaskV4@4
+      displayName: tfvalidate
+      inputs:
+        provider: "azurerm"
+        command: "validate"
+        workingDirectory: ${{parameters.projectLocation}}
+
+    - task: PowerShell@2
+      inputs:
+        targetType: "inline"
+        script: "Get-ChildItem  -File -Recurse -exclude *tf, *.tfvars | Remove-Item"
+        workingDirectory: ${{parameters.projectLocation}}
+
+    - task: ArchiveFiles@2
+      inputs:
+        rootFolderOrFile: ${{parameters.projectLocation}}
+        includeRootFolder: true
+        archiveType: "zip"
+        archiveFile: "$(System.DefaultWorkingDirectory)/${{parameters.artifactName}}.zip"
+        replaceExistingArchive: true
+
+    - task: PublishBuildArtifacts@1
+      inputs:
+        PathtoPublish: "$(System.DefaultWorkingDirectory)/${{parameters.artifactName}}.zip"
+        ArtifactName: ${{parameters.artifactName}}
+        publishLocation: "Container"

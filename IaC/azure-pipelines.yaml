@@ -1,0 +1,58 @@
+trigger:
+  batch: false
+  tags:
+    include:
+      - v*
+  branches:
+    include:
+      - main
+      - dev
+  
+variables:
+  backendServiceArmMultiEnv: "Global"
+  terraformArtifactName: "tf"
+  terraformArtifactNameTest: "tf-test"
+  terraformArtifactNameProd: "tf-prod"
+  bckco: "tfstate-pub-sub-integration"
+  bckke: "tfstate-pub-sub-integration"
+  terraformLocation: "IaC/terraform"
+
+  functionProject: "CommonFunction"
+  
+stages:
+  - stage: Build_FunctionApp
+    displayName: Build FunctionApp
+    jobs:
+      - template: templates/build_function.yaml
+        parameters:
+          projectName: $(functionProject)
+
+  - stage: Build_IaC
+    displayName: Build IaC
+    variables:
+      - group: Terraform Management Group Common # <- name of the Library variable group
+    jobs:
+        - template: templates/build_iac.yaml
+          parameters: 
+            projectLocation: $(terraformLocation)
+            artifactName: $(terraformArtifactName)
+            backendServiceArm : $(backendServiceArmMultiEnv)
+            bckco: $(bckco)
+            bckke: $(bckke)
+
+  - stage: Deploy
+    displayName: Deploy IaC
+    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main')) # Deploy dev from dev and feature branches
+    dependsOn: Build_IaC
+    variables:
+      - group: Terraform Management Group Common
+    jobs:       
+        - template: templates/deploy_iac.yaml
+          parameters:
+            projectLocation: $(terraformLocation)
+            artifactName: $(terraformArtifactName)
+            environmentName: dev
+            backendServiceArm : $(backendServiceArmMultiEnv)
+            bckco: $(bckco)
+            bckke: $(bckke)
+
